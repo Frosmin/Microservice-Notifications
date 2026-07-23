@@ -1,0 +1,62 @@
+pipeline {
+  agent any
+
+  tools {
+    nodejs 'NodeJS-22'
+  }
+
+  options {
+    timestamps()
+  }
+
+  stages {
+    stage('Preparar dependencias locales') {
+      steps {
+        dir('backend') {
+          bat '''
+            if exist node_modules rmdir /s /q node_modules
+            robocopy "C:\\datos\\tigo-gitlab\\tigo-p07-notificaciones\\backend\\node_modules" "node_modules" /E /NFL /NDL /NJH /NJS /NC /NS
+            if %ERRORLEVEL% GEQ 8 exit /b %ERRORLEVEL%
+            exit /b 0
+          '''
+        }
+      }
+    }
+
+    stage('Pruebas y cobertura') {
+      steps {
+        dir('backend') {
+          bat 'npm run coverage'
+        }
+      }
+    }
+
+    stage('Calidad de código') {
+      steps {
+        dir('backend') {
+          bat 'npm run lint'
+        }
+      }
+    }
+
+
+// para obliar a sonar a usar un java especifico
+stage('Análisis SonarQube') {
+  steps {
+    dir('backend') {
+      bat '''
+        set "SONAR_SCANNER_SKIP_JRE_PROVISIONING=true"
+        set "SONAR_SCANNER_JAVA_EXE_PATH=C:\\Program Files\\Eclipse Adoptium\\jdk-21.0.11.10-hotspot\\bin\\java.exe"
+        npm run sonar
+      '''
+    }
+  }
+}
+  }
+
+  post {
+    always {
+      archiveArtifacts artifacts: 'backend/coverage/lcov.info, backend/docs/evidencias/quality/eslint-report.json', allowEmptyArchive: true
+    }
+  }
+}

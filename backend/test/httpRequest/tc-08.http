@@ -1,0 +1,27 @@
+@baseUrl = http://localhost:3050/api/v1
+
+### Preparacion - Plantilla sin referencias
+# @name disposableTemplate
+POST {{baseUrl}}/templates
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{ "nombre": "tc08-eliminar-{{$timestamp}}", "canal": "EMAIL", "contenido": "Hola", "variables": [] }
+
+### TC-08.1 - Eliminar plantilla
+DELETE {{baseUrl}}/templates/{{disposableTemplate.response.body.$.id}}
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+
+
+### TC-08.2 - Confirmar eliminacion intentando usarla
+POST {{baseUrl}}/notifications
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Idempotency-Key: tc08-deleted-{{$timestamp}}
+Content-Type: application/json
+
+{
+  "canal": "EMAIL",
+  "destinatario": "cliente@example.com",
+  "plantillaId": {{disposableTemplate.response.body.$.id}},
+  "variables": {}
+}

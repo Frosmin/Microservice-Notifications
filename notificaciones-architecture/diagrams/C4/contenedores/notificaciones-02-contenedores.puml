@@ -1,0 +1,30 @@
+@startuml notificaciones-02-contenedores
+!define RELATIVE_INCLUDE "."
+!include ../../../../notificaciones-architecture/binariess/C4_Container.puml
+
+LAYOUT_LEFT_RIGHT()
+
+title Diagrama de Contenedores (C2) - Notificaciones
+
+System_Ext(emisores, "Servicios internos emisores", "Consumidores autorizados mediante X-API-Key.")
+System_Ext(gmail, "Gmail SMTP", "Entrega mensajes de correo.")
+System_Ext(sms, "Twilio", "Acepta y entrega mensajes SMS mediante su API REST.")
+
+System_Boundary(p07, "Microservicio P07 Notificaciones") {
+    Container(api, "API REST", "Node.js / ultimate-express / Zod", "Valida X-API-Key y solicitudes, gestiona plantillas y guarda notificación más evento outbox en una transacción PostgreSQL.")
+    Container(worker, "Worker y Outbox Publisher", "Node.js / BullMQ", "Publica eventos outbox, procesa entregas, registra intentos y aplica reintentos y throughput configurables.")
+    ContainerDb(db, "Fuente de verdad", "PostgreSQL", "Plantillas, notificaciones, idempotencia, estados, intentos y eventos transactional outbox.")
+    ContainerQueue(redis, "BullMQ", "Redis", "Mantiene jobs y metadatos operativos: demoras, reintentos y rate limiting. No guarda estado de negocio.")
+}
+
+Rel(emisores, api, "Gestiona plantillas y notificaciones", "HTTP / REST / JSON + X-API-Key")
+Rel(api, db, "Lee y persiste en transacciones", "SQL")
+
+Rel(worker, db, "Reclama outbox; consulta y actualiza estados e intentos", "SQL")
+Rel(worker, redis, "Publica y consume jobs BullMQ", "RESP")
+Rel(worker, gmail, "Envía EMAIL", "SMTP")
+Rel(worker, sms, "Envía SMS", "HTTPS / REST")
+
+
+SHOW_LEGEND()
+@enduml

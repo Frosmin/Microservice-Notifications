@@ -1,0 +1,13 @@
+
+### TC-02 - Crear plantilla SMS valida
+# @name createSmsTemplate
+POST http://localhost:3050/api/v1/templates
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{
+  "nombre": "tc02-codigo-acceso",
+  "canal": "SMS",
+  "contenido": "Tu codigo es \u007b\u007bcodigo\u007d\u007d",
+  "variables": ["codigo"]
+}

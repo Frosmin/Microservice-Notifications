@@ -1,0 +1,63 @@
+@startuml notificaciones-02-bp-gestion-plantillas
+
+title BP RF-7.2 - Gestión de plantillas
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam activity {
+    BackgroundColor white
+    BorderColor #1676D2
+    DiamondBackgroundColor #FFF2CC
+    DiamondBorderColor #C99A00
+    StartColor #222222
+    EndColor #222222
+}
+skinparam swimlane {
+    BorderColor #8AB4E8
+    TitleBackgroundColor #E8F1FB
+    TitleFontColor #003B70
+}
+
+|Servicio interno|
+start
+:Solicitar crear, actualizar\no eliminar plantilla con X-API-Key;
+
+|API REST|
+:Validar configuración y X-API-Key;
+
+if (¿API key configurada?) then (No)
+    :Responder 503;
+    stop
+endif
+if (¿API key válida?) then (No)
+    :Responder 401;
+    stop
+endif
+:Identificar operación y validar\nid, body y variables con Zod;
+if (¿Request válido?) then (No)
+    :Responder 400;
+    stop
+endif
+
+|PostgreSQL - fuente de verdad|
+:Ejecutar operación con sus reglas\nde existencia e integridad;
+
+
+|API REST|
+if (¿Resultado?) then (Correcto)
+    :Responder 201 al crear,\n200 al actualizar o 204 al eliminar;
+elseif (¿Resultado?) then (No existe)
+    :Responder 404;
+else (Conflicto)
+    :Responder 409 por duplicado\no plantilla asociada;
+endif
+stop
+
+legend right
+|= Método |= Regla principal |= Éxito |
+| POST | Nombre único por canal | 201 |
+| PUT | Existe y no duplica | 200 |
+| DELETE | Sin notificaciones asociadas | 204 |
+endlegend
+
+@enduml

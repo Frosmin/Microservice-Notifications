@@ -1,0 +1,24 @@
+@baseUrl = http://localhost:3050/api/v1
+
+### TC-24 - Preparacion
+# Configure MAX_NOTIFICATION_ATTEMPTS=5 y apagar el sms mock
+
+# @name template
+POST {{baseUrl}}/templates
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{ "nombre": "tc24-maximo-{{$timestamp}}", "canal": "SMS", "contenido": "Codigo \u007b\u007bcodigo\u007d\u007d", "variables": ["codigo"] }
+
+### Encolar notificacion
+# @name notification
+POST {{baseUrl}}/notifications
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Idempotency-Key: tc24-maximo-{{$timestamp}}
+Content-Type: application/json
+
+{ "canal": "SMS", "destinatario": "+59170000000", "plantillaId": {{template.response.body.$.id}}, "variables": { "codigo": "123456" } }
+
+### Consultar despues de agotar los cinco intentos
+GET {{baseUrl}}/notifications/{{notification.response.body.$.id}}
+X-API-Key: {{$dotenv SERVICE_API_KEY}}

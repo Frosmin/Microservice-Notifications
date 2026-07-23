@@ -1,0 +1,22 @@
+@startuml notificaciones-01-contexto
+
+!define RELATIVE_INCLUDE "."
+!include ../../../../notificaciones-architecture/binariess/C4_Context.puml
+
+LAYOUT_LEFT_RIGHT()
+
+title Diagrama de Contexto (C1) - Notificaciones
+
+System_Ext(emisores, "Servicios internos emisores", "Sistemas autorizados mediante X-API-Key que gestionan plantillas, envíos, consultas y reintentos.")
+System(notificaciones, "Microservicio Notificaciones", "API backend que persiste y entrega notificaciones por email o SMS con control de estado e intentos.")
+
+System_Ext(gmail, "Gmail SMTP", "Proveedor externo usado para entregar correo electrónico.")
+System_Ext(sms, "Twilio", "Proveedor externo usado para aceptar y entregar mensajes SMS.")
+
+Rel(emisores, notificaciones, "Gestiona plantillas y notificaciones", "HTTP / REST / JSON + X-API-Key")
+Rel(notificaciones, gmail, "Entrega EMAIL", "Nodemailer / SMTP")
+Rel(notificaciones, sms, "Entrega SMS", "HTTPS / REST")
+
+
+SHOW_LEGEND()
+@enduml

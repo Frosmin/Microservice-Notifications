@@ -1,0 +1,32 @@
+@baseUrl = http://localhost:3050/api/v1
+
+### TC-06.1 - ID cero
+PUT {{baseUrl}}/templates/0
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{ "nombre": "valida", "canal": "EMAIL", "contenido": "Hola", "variables": [] }
+
+
+### TC-06.2 - ID no numerico
+PUT {{baseUrl}}/templates/abc
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{ "nombre": "valida", "canal": "EMAIL", "contenido": "Hola", "variables": [] }
+
+
+### TC-06.3 - ID fuera de BIGINT
+PUT {{baseUrl}}/templates/9223372036854775808
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{ "nombre": "valida", "canal": "EMAIL", "contenido": "Hola", "variables": [] }
+
+
+### TC-06.4 - ID positivo inexistente
+PUT {{baseUrl}}/templates/99999999
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{ "nombre": "valida", "canal": "EMAIL", "contenido": "Hola", "variables": [] }

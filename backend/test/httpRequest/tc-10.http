@@ -1,0 +1,32 @@
+@baseUrl = http://localhost:3050/api/v1
+
+### Preparacion - Crear plantilla
+# @name referencedTemplate
+POST {{baseUrl}}/templates
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{ "nombre": "tc10-referenciada-{{$timestamp}}", "canal": "EMAIL", "contenido": "Hola \u007b\u007bnombre\u007d\u007d", "variables": ["nombre"] }
+
+### Preparacion - Crear notificacion que referencia la plantilla
+# @name referencedNotification
+POST {{baseUrl}}/notifications
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Idempotency-Key: tc10-reference-{{$timestamp}}
+Content-Type: application/json
+
+{
+  "canal": "EMAIL",
+  "destinatario": "cliente@example.com",
+  "plantillaId": {{referencedTemplate.response.body.$.id}},
+  "variables": { "nombre": "Ana" }
+}
+
+### TC-10 - Rechazar eliminacion de plantilla referenciada
+DELETE {{baseUrl}}/templates/{{referencedTemplate.response.body.$.id}}
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+
+
+### Confirmar que la notificacion sigue consultable
+GET {{baseUrl}}/notifications/{{referencedNotification.response.body.$.id}}
+X-API-Key: {{$dotenv SERVICE_API_KEY}}

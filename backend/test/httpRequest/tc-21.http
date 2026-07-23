@@ -1,0 +1,22 @@
+@baseUrl = http://localhost:3050/api/v1
+
+### Preparacion - Requiere API, worker, Redis y sms-mock
+# @name smsTemplate
+POST {{baseUrl}}/templates
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{ "nombre": "tc21-sms-{{$timestamp}}", "canal": "SMS", "contenido": "Tu codigo es \u007b\u007bcodigo\u007d\u007d", "variables": ["codigo"] }
+
+### TC-21.1 - Encolar SMS
+# @name smsNotification
+POST {{baseUrl}}/notifications
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Idempotency-Key: tc21-sms-{{$timestamp}}
+Content-Type: application/json
+
+{ "canal": "SMS", "destinatario": "+59170000000", "plantillaId": {{smsTemplate.response.body.$.id}}, "variables": { "codigo": "123456" } }
+
+### TC-21.2 - Consultar despues de que el worker procese
+GET {{baseUrl}}/notifications/{{smsNotification.response.body.$.id}}
+X-API-Key: {{$dotenv SERVICE_API_KEY}}

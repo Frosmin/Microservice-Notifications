@@ -1,0 +1,39 @@
+@baseUrl = http://localhost:3050/api/v1
+
+### Preparacion - Crear nombre unico en EMAIL
+# @name original
+POST {{baseUrl}}/templates
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{
+  "nombre": "tc04-unicidad-{{$timestamp}}",
+  "canal": "EMAIL",
+  "contenido": "Hola",
+  "variables": []
+}
+
+### TC-04.1 - Mismo nombre y mismo canal
+POST {{baseUrl}}/templates
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{
+  "nombre": "{{original.response.body.$.nombre}}",
+  "canal": "EMAIL",
+  "contenido": "Duplicada",
+  "variables": []
+}
+
+
+### TC-04.2 - Mismo nombre en otro canal
+POST {{baseUrl}}/templates
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{
+  "nombre": "{{original.response.body.$.nombre}}",
+  "canal": "SMS",
+  "contenido": "Permitida en SMS",
+  "variables": []
+}

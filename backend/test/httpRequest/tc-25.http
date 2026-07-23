@@ -1,0 +1,32 @@
+@baseUrl = http://localhost:3050/api/v1
+@notificationId = 1
+
+### TC-25.1 - Estado antes de procesar el trabajo duplicado
+@baseUrl = http://localhost:3050/api/v1
+
+
+# @name template
+POST {{baseUrl}}/templates
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{ "nombre": "tc24-maximo2", "canal": "SMS", "contenido": "Codigo \u007b\u007bcodigo\u007d\u007d", "variables": ["codigo"] }
+
+### Encolar notificacion 
+# @name notification
+POST {{baseUrl}}/notifications
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Idempotency-Key: 1234567
+Content-Type: application/json
+
+{ "canal": "SMS", "destinatario": "+59170000000", "plantillaId":40 , "variables": { "codigo": "123456" } }
+
+
+### Encolar notificacion segunda vez
+# @name notification
+POST {{baseUrl}}/notifications
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Idempotency-Key: 1234567
+Content-Type: application/json
+
+{ "canal": "SMS", "destinatario": "+59170000000", "plantillaId":40 , "variables": { "codigo": "123456" } }

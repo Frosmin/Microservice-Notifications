@@ -1,0 +1,88 @@
+@startuml notificaciones-04-bp-reintento
+
+title BP RF-7.4 - Reintento manual
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam activity {
+    BackgroundColor white
+    BorderColor #1676D2
+    DiamondBackgroundColor #FFF2CC
+    DiamondBorderColor #C99A00
+    StartColor #222222
+    EndColor #222222
+}
+skinparam swimlane {
+    BorderColor #8AB4E8
+    TitleBackgroundColor #E8F1FB
+    TitleFontColor #003B70
+}
+
+|Servicio interno|
+start
+:POST /api/v1/notifications/{id}/retry\ncon X-API-Key;
+
+|API REST|
+:Validar configuración y X-API-Key;
+note right
+  /api/v1/health, /metrics,
+  /openapi.json y /docs son públicos.
+end note
+if (¿API key configurada?) then (No)
+    :Responder 503;
+    stop
+endif
+if (¿API key válida?) then (No)
+    :Responder 401;
+    stop
+endif
+:Validar BIGINT positivo;
+if (¿Id válido?) then (No)
+    :Responder 400;
+    stop
+endif
+
+|PostgreSQL - fuente de verdad|
+:BEGIN y SELECT FOR UPDATE;
+if (¿Notificación existente?) then (No)
+    :ROLLBACK;
+    |API REST|
+    :Responder 404;
+    stop
+endif
+if (¿Estado FALLIDA?) then (No)
+    :ROLLBACK;
+    |API REST|
+    :Responder 409;
+    stop
+endif
+if (¿Quedan intentos?) then (No)
+    :ROLLBACK;
+    |API REST|
+    :Responder 409;
+    stop
+endif
+:Calcular backoff desde intentos acumulados;
+:Actualizar estado ENCOLADA;
+:Insertar outbox con available_at diferido;
+:COMMIT estado + outbox;
+
+|API REST|
+:Responder 202 Accepted;
+
+|Procesamiento asíncrono|
+:Outbox Publisher publica cuando\nvence available_at;
+if (¿Redis disponible?) then (No)
+    :Mantener outbox pendiente y\nreintentar publicación con backoff;
+else (Sí)
+    :Crear nuevo job BullMQ estable;
+endif
+stop
+
+note right
+  El bloqueo de fila serializa solicitudes
+  concurrentes. La segunda observa ENCOLADA
+  y recibe 409; Redis no guarda este control.
+end note
+
+@enduml

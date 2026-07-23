@@ -1,0 +1,35 @@
+@baseUrl = http://localhost:3050/api/v1
+
+### Preparacion - Plantilla EMAIL con dos variables
+# @name template
+POST {{baseUrl}}/templates
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{ "nombre": "tc17-template-{{$timestamp}}", "canal": "EMAIL", "contenido": "Hola \u007b\u007bnombre\u007d\u007d, pedido \u007b\u007bpedido\u007d\u007d", "variables": ["nombre", "pedido"] }
+
+### TC-17.1 - Canal incompatible
+POST {{baseUrl}}/notifications
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Idempotency-Key: tc17-canal-{{$timestamp}}
+Content-Type: application/json
+
+{ "canal": "SMS", "destinatario": "+59170000000", "plantillaId": {{template.response.body.$.id}}, "variables": { "nombre": "Ana", "pedido": 1 } }
+
+
+### TC-17.2 - Falta variable requerida
+POST {{baseUrl}}/notifications
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Idempotency-Key: tc17-falta-{{$timestamp}}
+Content-Type: application/json
+
+{ "canal": "EMAIL", "destinatario": "cliente@example.com", "plantillaId": {{template.response.body.$.id}}, "variables": { "nombre": "Ana" } }
+
+
+### TC-17.3 - Variable adicional
+POST {{baseUrl}}/notifications
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Idempotency-Key: tc17-adicional-{{$timestamp}}
+Content-Type: application/json
+
+{ "canal": "EMAIL", "destinatario": "cliente@example.com", "plantillaId": {{template.response.body.$.id}}, "variables": { "nombre": "Ana", "pedido": 1, "extra": true } }

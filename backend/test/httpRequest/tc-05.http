@@ -1,0 +1,41 @@
+@baseUrl = http://localhost:3050/api/v1
+
+### Preparacion - Crear plantilla
+# @name setupTemplate
+POST {{baseUrl}}/templates
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{
+  "nombre": "tc05-original-{{$timestamp}}",
+  "canal": "EMAIL",
+  "contenido": "Hola \u007b\u007bnombre\u007d\u007d",
+  "variables": ["nombre"]
+}
+
+### TC-05 - Actualizar plantilla existente
+# @name updatedTemplate
+PUT {{baseUrl}}/templates/{{setupTemplate.response.body.$.id}}
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{
+  "nombre": "tc05-actualizada-{{$timestamp}}",
+  "canal": "SMS",
+  "contenido": "Codigo \u007b\u007bcodigo\u007d\u007d",
+  "variables": ["codigo"]
+}
+
+
+### Comprobar uso de la plantilla actualizada
+POST {{baseUrl}}/notifications
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Idempotency-Key: tc05-notification-{{$timestamp}}
+Content-Type: application/json
+
+{
+  "canal": "SMS",
+  "destinatario": "+59170000000",
+  "plantillaId": {{setupTemplate.response.body.$.id}},
+  "variables": { "codigo": "123456" }
+}

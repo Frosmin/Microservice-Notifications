@@ -1,0 +1,12 @@
+
+# @name createEmailTemplate
+POST http://localhost:3050/api/v1/templates
+Content-Type: application/json
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+
+{
+  "nombre": "tc01-confirmacion3",
+  "canal": "EMAIL",
+  "contenido": "Hola \u007b\u007bnombre\u007d\u007d, tu pedido \u007b\u007bpedido\u007d\u007d fue confirmado.",
+  "variables": ["nombre", "pedido"]
+}

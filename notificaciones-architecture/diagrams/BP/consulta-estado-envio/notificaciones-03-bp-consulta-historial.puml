@@ -1,0 +1,68 @@
+@startuml notificaciones-03-bp-consulta-historial
+
+title BP RF-7.3 y RF-7.5 - Consulta de estado e historial
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam activity {
+    BackgroundColor white
+    BorderColor #1676D2
+    DiamondBackgroundColor #FFF2CC
+    DiamondBorderColor #C99A00
+    StartColor #222222
+    EndColor #222222
+}
+skinparam swimlane {
+    BorderColor #8AB4E8
+    TitleBackgroundColor #E8F1FB
+    TitleFontColor #003B70
+}
+
+|Servicio interno|
+start
+:Solicitar consulta con X-API-Key;
+
+|API REST|
+:Validar configuración y X-API-Key;
+
+if (¿API key configurada?) then (No)
+    :Responder 503;
+    stop
+endif
+if (¿API key válida?) then (No)
+    :Responder 401;
+    stop
+endif
+
+|Servicio interno|
+:Elegir consulta;
+
+if (¿Tipo?) then (Por id)
+    :GET /api/v1/notifications/{id};
+    |API REST|
+    :Validar BIGINT positivo;
+    |PostgreSQL - fuente de verdad|
+    :Consultar notificación e intentos\nordenados por número;
+    |API REST|
+    if (¿Existe?) then (Sí)
+        :Responder 200 con estado, contador\ne historialIntentos;
+    else (No)
+        :Responder 404;
+    endif
+    stop
+else (Listado)
+    :GET /api/v1/notifications\n?canal&estado&page&limit;
+    |API REST|
+    :Validar filtros y paginación;
+    if (¿Consulta válida?) then (No)
+        :Responder 400;
+        stop
+    endif
+    |PostgreSQL - fuente de verdad|
+    :Filtrar, contar y obtener página\nordenada por fecha descendente;
+    |API REST|
+    :Responder 200 con items y pagination,\naunque la lista esté vacía;
+    stop
+endif
+
+@enduml

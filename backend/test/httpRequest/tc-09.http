@@ -1,0 +1,20 @@
+@baseUrl = http://localhost:3050/api/v1
+
+### TC-09.1 - ID cero
+DELETE {{baseUrl}}/templates/0
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+
+
+### TC-09.2 - ID no numerico
+DELETE {{baseUrl}}/templates/abc
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+
+
+### TC-09.3 - ID fuera de BIGINT
+DELETE {{baseUrl}}/templates/9223372036854775808
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+
+
+### TC-09.4 - ID positivo inexistente
+DELETE {{baseUrl}}/templates/99999999
+X-API-Key: {{$dotenv SERVICE_API_KEY}}

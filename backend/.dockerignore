@@ -1,0 +1,13 @@
+.git/
+helm/
+coverage/
+.scannerwork/
+.npmrc
+.gitignore
+test
+vitest.config.js
+eslint.config.js
+Jenkinsfile
+Dockerfile
+.dockerignore
+.env

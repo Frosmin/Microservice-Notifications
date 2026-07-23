@@ -1,0 +1,9 @@
+@baseUrl = http://localhost:3050/api/v1
+
+### TC-36.1 - Solicitud sin credencial
+GET {{baseUrl}}/notifications
+
+
+### TC-36.2 - Credencial invalida
+GET {{baseUrl}}/notifications
+X-API-Key: credencial-invalida

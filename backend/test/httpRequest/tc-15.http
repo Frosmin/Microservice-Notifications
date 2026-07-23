@@ -1,0 +1,33 @@
+@baseUrl = http://localhost:3050/api/v1
+@runId = cambiar-antes-de-repetir
+@idempotencyKey = tc15-conflicto-{{runId}}
+
+### Preparacion - Plantilla
+# @name template
+POST {{baseUrl}}/templates
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{ "nombre": "tc15-template-{{$timestamp}}", "canal": "EMAIL", "contenido": "Hola \u007b\u007bnombre\u007d\u007d", "variables": ["nombre"] }
+
+### Preparacion - Usar la clave por primera vez
+# @name originalNotification
+POST {{baseUrl}}/notifications
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Idempotency-Key: {{idempotencyKey}}
+Content-Type: application/json
+
+{ "canal": "EMAIL", "destinatario": "cliente@example.com", "plantillaId": {{template.response.body.$.id}}, "variables": { "nombre": "Ana" } }
+
+### TC-15 - Misma clave con otro cuerpo
+POST {{baseUrl}}/notifications
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Idempotency-Key: {{idempotencyKey}}
+Content-Type: application/json
+
+{ "canal": "EMAIL", "destinatario": "otro@example.com", "plantillaId": {{template.response.body.$.id}}, "variables": { "nombre": "Ana" } }
+
+
+### Confirmar que el recurso original no cambio
+GET {{baseUrl}}/notifications/{{originalNotification.response.body.$.id}}
+X-API-Key: {{$dotenv SERVICE_API_KEY}}

@@ -1,0 +1,29 @@
+@baseUrl = http://localhost:3050/api/v1
+
+### Preparacion - Plantilla A
+# @name templateA
+POST {{baseUrl}}/templates
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{ "nombre": "tc07-a-{{$timestamp}}", "canal": "EMAIL", "contenido": "A", "variables": [] }
+
+### Preparacion - Plantilla B
+# @name templateB
+POST {{baseUrl}}/templates
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{ "nombre": "tc07-b-{{$timestamp}}", "canal": "EMAIL", "contenido": "B", "variables": [] }
+
+### TC-07 - Actualizar B con el nombre-canal de A
+PUT {{baseUrl}}/templates/{{templateB.response.body.$.id}}
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{
+  "nombre": "{{templateA.response.body.$.nombre}}",
+  "canal": "EMAIL",
+  "contenido": "No debe persistir",
+  "variables": []
+}

@@ -1,0 +1,23 @@
+@baseUrl = http://localhost:3050/api/v1
+
+### Preparacion - Requiere API, worker, Redis y SMTP validos
+# @name emailTemplate
+POST {{baseUrl}}/templates
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{ "nombre": "tc20-email-{{$timestamp}}", "canal": "EMAIL", "contenido": "Hola \u007b\u007bnombre\u007d\u007d", "variables": ["nombre"] }
+
+### TC-20.1 - Encolar EMAIL
+# @name emailNotification
+POST {{baseUrl}}/notifications
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Idempotency-Key: tc20-email-{{$timestamp}}
+Content-Type: application/json
+
+{ "canal": "EMAIL", "destinatario": "cliente@example.com", "plantillaId": {{emailTemplate.response.body.$.id}}, "variables": { "nombre": "Ana" } }
+
+### TC-20.2 - Consultar despues de que el worker procese
+# Ejecutar manualmente cuando el proveedor haya aceptado el correo.
+GET {{baseUrl}}/notifications/{{emailNotification.response.body.$.id}}
+X-API-Key: {{$dotenv SERVICE_API_KEY}}

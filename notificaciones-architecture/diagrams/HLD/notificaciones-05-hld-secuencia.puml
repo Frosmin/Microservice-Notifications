@@ -1,0 +1,99 @@
+@startuml notificaciones-05-hld-secuencia
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 70
+skinparam sequence {
+    ArrowColor #1168BD
+    LifeLineBorderColor #1168BD
+    ParticipantBorderColor #003865
+    ParticipantBackgroundColor #003865
+    ParticipantFontColor #FFFFFF
+    ActorBorderColor #003865
+}
+
+title HLD - Notificaciones con transactional outbox y BullMQ
+
+participant "Servicio interno\nemisor" as emisor
+participant "API-key\nMiddleware" as access
+participant "API REST" as api
+database "PostgreSQL\nfuente de verdad" as db
+participant "Outbox\nPublisher" as publisher
+queue "BullMQ\nsobre Redis" as bull
+participant "Worker\nde entregas" as worker
+participant "Proveedor\npor canal" as provider
+
+== Aceptación durable ==
+emisor -> access : POST /api/v1/notifications\nX-API-Key + Idempotency-Key
+access -> access : validar SERVICE_API_KEY y X-API-Key
+break SERVICE_API_KEY ausente o corta
+    access --> emisor : 503 Service Unavailable
+end
+break X-API-Key ausente o inválida
+    access --> emisor : 401 Unauthorized
+end
+access -> api : request autorizado
+
+api -> api : validar request, plantilla y variables
+alt request inválido
+    api --> emisor : 400 o 404
+else request válido
+    api -> db : BEGIN; INSERT notificación ENCOLADA\nON CONFLICT DO NOTHING
+    alt idempotency_key existente
+        api -> db : COMMIT sin cambios
+        api -> db : SELECT separado por idempotency_key
+        api -> api : comparar payload completo
+        api --> emisor : 200 existente o 409 conflicto
+    else notificación nueva
+        api -> db : INSERT notification_outbox; COMMIT
+        api --> emisor : 202 Accepted
+    end
+end
+
+== Publicación recuperable ==
+publisher -> db : reclamar evento pendiente\nFOR UPDATE SKIP LOCKED
+publisher -> bull : add deliver-notification\njobId = outbox-{id}
+alt Redis no disponible
+    publisher -> db : incrementar publish_attempts y\nreprogramar available_at con backoff
+else job creado o ya existente
+    publisher -> db : marcar published_at
+end
+
+== Entrega y reintentos automáticos ==
+bull -> worker : job disponible tras rate limiter
+worker -> db : advisory lock + consultar\nnotificación y plantilla
+alt estado ENVIADA
+    worker -> worker : preparar { skipped: true }
+else estado FALLIDA o máximo agotado
+    worker -> db : asegurar estado FALLIDA
+    worker -> worker : preparar UnrecoverableError
+else entrega pendiente
+    worker -> provider : solicitar envío por SMTP o HTTPS
+    provider --> worker : aceptación o error
+    alt proveedor acepta el envío
+        worker -> db : INSERT intento EXITOSO + estado ENVIADA
+        worker -> worker : preparar { sent: true }
+    else error transitorio y quedan intentos
+        worker -> db : INSERT intento FALLIDO + estado ENCOLADA
+        worker -> worker : conservar error transitorio
+    else error permanente o máximo alcanzado
+        worker -> db : INSERT intento FALLIDO + estado FALLIDA
+        worker -> worker : preparar UnrecoverableError
+    end
+end
+worker -> db : liberar advisory lock (finally)
+worker --> bull : resolver resultado o lanzar error
+bull -> bull : completar, reintentar con backoff\no fallar sin reintento según resultado
+
+== Reintento manual ==
+emisor -> access : POST /api/v1/notifications/{id}/retry\nX-API-Key
+access -> api : request autorizado
+api -> db : BEGIN; SELECT FOR UPDATE; validar FALLIDA\nUPDATE ENCOLADA; INSERT outbox diferido; COMMIT
+alt permitido
+    api --> emisor : 202 Accepted
+else inexistente o no permitido
+    api --> emisor : 404 o 409
+end
+
+
+@enduml

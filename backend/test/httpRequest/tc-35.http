@@ -1,0 +1,20 @@
+@baseUrl = http://localhost:3050/api/v1
+
+### TC-35.1 - ID cero
+POST {{baseUrl}}/notifications/0/retry
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+
+
+### TC-35.2 - ID no numerico
+POST {{baseUrl}}/notifications/abc/retry
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+
+
+### TC-35.3 - ID fuera de BIGINT
+POST {{baseUrl}}/notifications/9223372036854775808/retry
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+
+
+### TC-35.4 - ID positivo inexistente
+POST {{baseUrl}}/notifications/99999999/retry
+X-API-Key: {{$dotenv SERVICE_API_KEY}}

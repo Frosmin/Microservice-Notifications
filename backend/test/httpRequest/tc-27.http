@@ -1,0 +1,20 @@
+@baseUrl = http://localhost:3050/api/v1
+
+### TC-27.1 - ID cero
+GET {{baseUrl}}/notifications/0
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+
+
+### TC-27.2 - ID no numerico
+GET {{baseUrl}}/notifications/abc
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+
+
+### TC-27.3 - ID fuera de BIGINT
+GET {{baseUrl}}/notifications/9223372036854775808
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+
+
+### TC-27.4 - ID positivo inexistente
+GET {{baseUrl}}/notifications/99999999
+X-API-Key: {{$dotenv SERVICE_API_KEY}}

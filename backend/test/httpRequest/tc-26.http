@@ -1,0 +1,7 @@
+@baseUrl = http://localhost:3050/api/v1
+@notificationId = 27
+
+### TC-26 - Consultar notificacion con historial
+# Use el ID de una notificacion que ya tenga uno o mas intentos.
+GET {{baseUrl}}/notifications/{{notificationId}}
+X-API-Key: {{$dotenv SERVICE_API_KEY}}

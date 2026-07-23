@@ -1,0 +1,58 @@
+@startuml notificaciones-03-componentes
+
+!define RELATIVE_INCLUDE "."
+!include ../../../../notificaciones-architecture/binariess/C4_Component.puml
+
+LAYOUT_TOP_DOWN()
+
+title Diagrama de Componentes (C3) - Notificaciones
+
+System_Ext(emisores, "Servicios internos emisores", "Consumidores autorizados mediante X-API-Key.")
+System_Ext(gmail, "Gmail SMTP", "Proveedor externo de email.")
+System_Ext(sms, "Twilio", "Proveedor externo de SMS.")
+ContainerDb(db, "PostgreSQL", "Fuente de verdad", "Plantillas, notificaciones, intentos y notification_outbox.")
+ContainerQueue(redis, "BullMQ sobre Redis", "Infraestructura operativa", "Jobs, backoff y rate limiting; sin estado de negocio.")
+
+Container_Boundary(api, "API REST") {
+    Component(access, "Control de acceso", "API-Key middleware", "Valida X-API-Key en /api/v1 y responde 401 o 503 cuando corresponde.")
+    Component(http, "Capa HTTP", "Routes / Zod / Controllers", "Valida body, params, query e Idempotency-Key y traduce resultados a respuestas estandarizadas.")
+    Component(apiServices, "Servicios de aplicación", "NotificationService / TemplateService", "Aplica idempotencia, reglas de plantillas, consultas y reintento manual.")
+    Component(apiPersistence, "Persistencia transaccional", "Repositories / withTransaction", "Guarda notificación y outbox atómicamente; consulta y modifica el estado de negocio.")
+}
+
+Container_Boundary(runtime, "Worker y Outbox Publisher") {
+    Component(publisher, "Outbox Publisher", "Polling PostgreSQL", "Reclama eventos pendientes y los publica como jobs BullMQ con jobId estable.")
+    Component(queueModule, "Cola de notificaciones", "BullMQ Queue", "Configura intentos, backoff exponencial y retención de jobs.")
+    Component(worker, "Notification Worker", "BullMQ Worker", "Consume jobs con concurrencia y rate limiting configurables, y registra errores del worker o de los jobs.")
+    Component(processor, "Procesador de entrega", "Job processor", "Bloquea por notificación, consulta su estado, entrega y registra cada intento.")
+    Component(senders, "Adaptadores de canal", "Nodemailer / fetch", "Envía EMAIL por Gmail SMTP y SMS mediante la API REST de Twilio.")
+}
+
+Rel(emisores, access, "HTTP / REST / JSON + X-API-Key")
+Rel(access, http, "Autoriza request versionado")
+Rel(http, apiServices, "Ejecuta casos de uso")
+Rel(apiServices, apiPersistence, "Lee o persiste")
+Rel(apiPersistence, db, "SQL")
+
+Rel(publisher, db, "FOR UPDATE SKIP LOCKED; marca publicado o reprograma", "SQL")
+Rel(publisher, queueModule, "Crea job outbox-{id}")
+Rel(queueModule, redis, "Almacena jobs BullMQ", "RESP")
+Rel(redis, worker, "Entrega jobs disponibles", "RESP")
+Rel(worker, processor, "Invoca processor(job)")
+Rel(processor, db, "Advisory lock; lee estado y registra intentos", "SQL")
+Rel(processor, senders, "Entrega contenido renderizado")
+Rel(senders, gmail, "EMAIL", "SMTP")
+Rel(senders, sms, "SMS", "HTTPS / REST")
+
+Lay_D(access, http)
+Lay_D(http, apiServices)
+Lay_D(apiServices, apiPersistence)
+Lay_R(apiPersistence, publisher)
+Lay_D(publisher, queueModule)
+Lay_R(queueModule, worker)
+Lay_D(worker, processor)
+Lay_D(processor, senders)
+
+
+SHOW_LEGEND()
+@enduml

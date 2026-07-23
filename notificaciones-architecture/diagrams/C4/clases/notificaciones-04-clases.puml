@@ -1,0 +1,184 @@
+@startuml notificaciones-04-clases
+
+top to bottom direction
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam class {
+    BackgroundColor #FFFFFF
+    BorderColor #1168BD
+    ArrowColor #1168BD
+    FontColor #1A1A1A
+}
+skinparam package {
+    BackgroundColor #F4F8FD
+    BorderColor #9BB7D4
+    FontColor #003865
+}
+
+title Vista de código y modelo - Notificaciones
+
+package "Modelo persistido en PostgreSQL" as model {
+    class Plantilla {
+        +id: bigint
+        +nombre: string
+        +canal: EMAIL | SMS
+        +contenido: string
+        +variables: string[]
+        +createdAt: timestamptz
+        +updatedAt: timestamptz
+    }
+
+    class Notificacion {
+        +id: bigint
+        +canal: EMAIL | SMS
+        +destinatario: string
+        +plantillaId: bigint
+        +variables: JSONB
+        +estado: ENCOLADA | ENVIADA | FALLIDA
+        +intentos: integer
+        +idempotencyKey: string
+        +createdAt: timestamptz
+        +updatedAt: timestamptz
+    }
+
+    class Intento {
+        +id: bigint
+        +notificacionId: bigint
+        +numero: integer
+        +resultado: EXITOSO | FALLIDO
+        +detalle: string?
+        +timestamp: timestamptz
+    }
+
+    class OutboxEvent {
+        +id: bigint
+        +notificationId: bigint
+        +publishedAt: timestamptz?
+        +publishAttempts: integer
+        +availableAt: timestamptz
+        +lastError: string?
+        +createdAt: timestamptz
+        +updatedAt: timestamptz
+    }
+}
+
+Plantilla "1" <-- "0..*" Notificacion
+Notificacion "1" *-- "0..*" Intento
+Notificacion "1" *-- "0..*" OutboxEvent
+
+package "API y aplicación" as application {
+    class NotificationService <<module>> {
+        +createNotificationService(request, idempotencyKey)
+        +getNotificationService(id)
+        +listNotificationsService(filters)
+        +retryNotificationService(id)
+        +retryBackoff(attempts)
+    }
+
+    class TemplateService <<module>> {
+        +createTemplateService(template)
+        +updateTemplateService(id, template)
+        +deleteTemplateService(id)
+    }
+
+    class NotificationRepository <<module>> {
+        +insertNotification(data)
+        +findNotificationByIdempotencyKey(key)
+        +findNotificationById(id)
+        +findNotificationByIdForUpdate(client, id)
+        +findNotificationsPage(filters)
+        +scheduleNotificationRetry(client, id, delayMs)
+    }
+
+    class TemplateRepository <<module>> {
+        +findTemplateById(id)
+        +insertTemplate(data)
+        +updateTemplateById(id, data)
+        +deleteTemplateById(id)
+    }
+
+    class AttemptRepository <<module>> {
+        +findAttemptsByNotificationId(id)
+    }
+}
+
+NotificationService --> NotificationRepository
+NotificationService --> TemplateRepository
+NotificationService --> AttemptRepository
+TemplateService --> TemplateRepository
+NotificationRepository --> Notificacion
+NotificationRepository --> OutboxEvent : misma transacción
+TemplateRepository --> Plantilla
+AttemptRepository --> Intento
+
+package "Procesamiento asíncrono" as asynchronous {
+    class OutboxPublisher <<module>> {
+        +publishNextOutboxEvent(queue)
+        +publishOutboxBatch(queue)
+        +startOutboxPublisher(queue)
+    }
+
+    class OutboxRepository <<module>> {
+        +lockNextOutboxEvent(client)
+        +markOutboxPublished(client, id)
+        +markOutboxPublicationFailed(client, id, error, delayMs)
+    }
+
+    class NotificationQueue <<BullMQ Queue>> {
+        +createNotificationQueue(connection)
+        +enqueueOutboxEvent(queue, event)
+        jobId = "outbox-{event.id}"
+        backoff = exponential + jitter
+    }
+
+    class NotificationWorker <<BullMQ Worker factory>> {
+        +createNotificationWorker(dependencies)
+        +concurrency: integer
+        +limiter: integer / minute
+        +on(failed | error)
+    }
+
+    class NotificationProcessor <<job processor factory>> {
+        +createNotificationProcessor(dependencies)
+        +process(job)
+    }
+
+    class DeliveryRepository <<module>> {
+        +acquireNotificationLock(client, id)
+        +releaseNotificationLock(client, id)
+        +findNotificationForDelivery(client, id)
+        +recordDeliveryAttempt(client, result)
+        +markNotificationFailed(client, id)
+    }
+
+    class TemplateRenderer <<module>> {
+        +renderTemplate(content, variables)
+    }
+
+    class EmailSender <<Nodemailer>> {
+        +createEmailSender(config)
+        +deterministicMessageId(notificationId, user)
+    }
+
+    class SmsSender <<Twilio REST>> {
+        +createSmsSender(config)
+    }
+}
+
+OutboxPublisher --> OutboxRepository
+OutboxPublisher --> NotificationQueue
+OutboxRepository --> OutboxEvent
+NotificationQueue --> NotificationWorker : job BullMQ
+NotificationWorker --> NotificationProcessor : processor(job)
+NotificationProcessor --> DeliveryRepository
+NotificationProcessor --> TemplateRenderer
+NotificationProcessor --> EmailSender
+NotificationProcessor --> SmsSender
+DeliveryRepository --> Notificacion
+DeliveryRepository --> Intento
+
+
+@enduml

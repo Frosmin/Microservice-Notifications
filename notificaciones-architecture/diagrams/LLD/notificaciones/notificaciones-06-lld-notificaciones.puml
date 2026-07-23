@@ -1,0 +1,101 @@
+@startuml notificaciones-06-lld-notificaciones
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 65
+skinparam sequence {
+    ArrowColor #1168BD
+    LifeLineBorderColor #1168BD
+    ParticipantBorderColor #003865
+    ParticipantBackgroundColor #003865
+    ParticipantFontColor #FFFFFF
+    ActorBorderColor #003865
+}
+
+title LLD - API de notificaciones
+
+participant "Servicio interno\nemisor" as emisor
+participant "API-key\nMiddleware" as access
+participant "Middleware\nZod" as validation
+participant "Notification\nController" as controller
+participant "Notification\nService" as service
+participant "Repositories" as repositories
+database "PostgreSQL\nfuente de verdad" as db
+
+== Crear notificación ==
+emisor -> access : POST /api/v1/notifications\nX-API-Key + Idempotency-Key + body
+access -> access : validar SERVICE_API_KEY y X-API-Key
+break SERVICE_API_KEY ausente o corta
+    access --> emisor : 503
+end
+break X-API-Key ausente o inválida
+    access --> emisor : 401
+end
+access -> validation : request autorizado
+validation -> validation : validar header, canal, destinatario,\nplantillaId y variables
+alt request inválido
+    validation --> emisor : 400
+else request válido
+    validation -> controller : create(body, idempotencyKey)
+    controller -> service : createNotificationService(...)
+    service -> repositories : findTemplateById(plantillaId)
+    repositories -> db : SELECT plantilla
+    service -> service : validar canal y claves exactas
+    alt plantilla inexistente o incompatible
+        service --> controller : 404 o 400
+        controller --> emisor : error estandarizado
+    else datos válidos
+        service -> repositories : insertNotification(...)
+        repositories -> db : BEGIN\nINSERT notificacion ON CONFLICT DO NOTHING
+        alt notificación creada
+            repositories -> db : INSERT notification_outbox\nCOMMIT
+            service --> controller : created = true
+            controller --> emisor : 202 ENCOLADA
+        else idempotency_key existente
+            repositories -> db : COMMIT sin cambios
+            service -> repositories : findNotificationByIdempotencyKey(key)
+            repositories -> db : SELECT por idempotency_key
+            service -> service : comparar payload completo
+            alt mismo payload
+                controller --> emisor : 200 recurso existente
+            else payload distinto
+                controller --> emisor : 409 Conflict
+            end
+        end
+    end
+end
+
+== Consultar y listar ==
+emisor -> access : GET /api/v1/notifications/{id}\no GET /api/v1/notifications?filtros\nX-API-Key
+access -> validation : request autorizado
+validation -> controller : params/query normalizados
+controller -> service : get(id) o list(filters)
+service -> repositories : consultar notificación + intentos\no página filtrada
+repositories -> db : SELECT parametrizado
+alt id inexistente
+    controller --> emisor : 404
+else consulta válida
+    controller --> emisor : 200 recurso o página
+end
+
+== Reintento manual ==
+emisor -> access : POST /api/v1/notifications/{id}/retry\nX-API-Key
+access -> validation : request autorizado
+validation -> controller : id BIGINT válido
+controller -> service : retryNotificationService(id)
+service -> repositories : withTransaction + findByIdForUpdate
+repositories -> db : BEGIN; SELECT FOR UPDATE
+alt inexistente
+    repositories -> db : ROLLBACK
+    controller --> emisor : 404
+else estado distinto de FALLIDA o máximo alcanzado
+    repositories -> db : ROLLBACK
+    controller --> emisor : 409
+else permitido
+    service -> service : retryBackoff(intentos)
+    service -> repositories : scheduleNotificationRetry(...)
+    repositories -> db : UPDATE estado ENCOLADA\nINSERT outbox con available_at; COMMIT
+    controller --> emisor : 202 ENCOLADA
+end
+
+@enduml

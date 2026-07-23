@@ -1,0 +1,959 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "P07 - Microservicio de notificaciones",
+    "version": "1.0.0",
+    "description": "API REST para administrar plantillas, encolar notificaciones por EMAIL o SMS, consultar su estado y reintentar entregas fallidas. La entrega se procesa de forma asincrona mediante PostgreSQL, un outbox transaccional, Redis y BullMQ.",
+    "contact": {
+      "name": "Bootcamp de Desarrollo Tigo"
+    }
+  },
+  "servers": [
+    {
+      "url": "/api/v1",
+      "description": "API version 1"
+    }
+  ],
+  "security": [
+    {
+      "ApiKeyAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Health",
+      "description": "Disponibilidad del proceso HTTP."
+    },
+    {
+      "name": "Templates",
+      "description": "Administracion de plantillas de EMAIL y SMS."
+    },
+    {
+      "name": "Notifications",
+      "description": "Creacion, consulta, historial y reintentos de notificaciones."
+    },
+    {
+      "name": "Observability",
+      "description": "Metricas tecnicas del servicio."
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "security": [],
+        "tags": ["Health"],
+        "summary": "Consultar la salud de la API",
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "description": "El proceso HTTP esta disponible.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                },
+                "example": {
+                  "status": "UP"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/templates": {
+      "post": {
+        "tags": ["Templates"],
+        "summary": "Crear una plantilla",
+        "description": "Crea una plantilla. El nombre debe ser unico dentro del mismo canal.",
+        "operationId": "createTemplate",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplateRequest"
+              },
+              "example": {
+                "nombre": "confirmacion-pedido",
+                "canal": "EMAIL",
+                "contenido": "Hola {{nombre}}, tu pedido {{pedido}} fue confirmado.",
+                "variables": ["nombre", "pedido"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Plantilla creada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Template"
+                },
+                "example": {
+                  "id": "1",
+                  "nombre": "confirmacion-pedido",
+                  "canal": "EMAIL",
+                  "contenido": "Hola {{nombre}}, tu pedido {{pedido}} fue confirmado.",
+                  "variables": ["nombre", "pedido"]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/templates/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ResourceId"
+        }
+      ],
+      "put": {
+        "tags": ["Templates"],
+        "summary": "Actualizar una plantilla",
+        "description": "Reemplaza el nombre, canal, contenido y variables de la plantilla indicada.",
+        "operationId": "updateTemplate",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplateRequest"
+              },
+              "example": {
+                "nombre": "confirmacion-pedido-v2",
+                "canal": "EMAIL",
+                "contenido": "Hola {{nombre}}, el pedido {{pedido}} esta listo.",
+                "variables": ["nombre", "pedido"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Plantilla actualizada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Template"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Templates"],
+        "summary": "Eliminar una plantilla",
+        "description": "Elimina una plantilla sin notificaciones asociadas.",
+        "operationId": "deleteTemplate",
+        "responses": {
+          "204": {
+            "description": "Plantilla eliminada. La respuesta no contiene cuerpo."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/notifications": {
+      "get": {
+        "tags": ["Notifications"],
+        "summary": "Listar el historial de notificaciones",
+        "description": "Devuelve las notificaciones ordenadas de la mas reciente a la mas antigua, con filtros opcionales y paginacion.",
+        "operationId": "listNotifications",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ChannelFilter"
+          },
+          {
+            "$ref": "#/components/parameters/StatusFilter"
+          },
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pagina de notificaciones.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "post": {
+        "tags": ["Notifications"],
+        "summary": "Enviar una notificacion",
+        "description": "Valida la plantilla y registra atomica y duraderamente la notificacion y su evento outbox. La entrega al proveedor ocurre de forma asincrona.",
+        "operationId": "createNotification",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationRequest"
+              },
+              "examples": {
+                "email": {
+                  "summary": "Notificacion por EMAIL",
+                  "value": {
+                    "canal": "EMAIL",
+                    "destinatario": "cliente@example.com",
+                    "plantillaId": 1,
+                    "variables": {
+                      "nombre": "Ana",
+                      "pedido": 4521
+                    }
+                  }
+                },
+                "sms": {
+                  "summary": "Notificacion por SMS",
+                  "value": {
+                    "canal": "SMS",
+                    "destinatario": "+59170000000",
+                    "plantillaId": 2,
+                    "variables": {
+                      "codigo": 7391
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Notificacion nueva aceptada y encolada de forma duradera.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Notification"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "La misma clave idempotente y el mismo cuerpo ya habian sido aceptados; se devuelve la notificacion existente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Notification"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/notifications/{id}": {
+      "get": {
+        "tags": ["Notifications"],
+        "summary": "Consultar una notificacion",
+        "description": "Devuelve el estado actual y el historial ordenado de intentos de entrega.",
+        "operationId": "getNotification",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ResourceId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notificacion encontrada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/notifications/{id}/retry": {
+      "post": {
+        "tags": ["Notifications"],
+        "summary": "Reintentar una notificacion fallida",
+        "description": "Acepta solamente notificaciones FALLIDA con intentos disponibles. Conserva el contador y programa un nuevo evento usando backoff exponencial.",
+        "operationId": "retryNotification",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ResourceId"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Reintento aceptado; la notificacion vuelve a ENCOLADA.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Notification"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "servers": [
+        {
+          "url": "/",
+          "description": "Raiz del proceso HTTP"
+        }
+      ],
+      "get": {
+        "security": [],
+        "tags": ["Observability"],
+        "summary": "Obtener metricas Prometheus",
+        "operationId": "getMetrics",
+        "responses": {
+          "200": {
+            "description": "Metricas en el formato de exposicion de Prometheus.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "http_request_duration_seconds_count{method=\"GET\",status_code=\"200\"} 1\n"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "Clave compartida del servicio, configurada mediante SERVICE_API_KEY."
+      }
+    },
+    "parameters": {
+      "ResourceId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Identificador BIGINT positivo del recurso.",
+        "schema": {
+          "type": "string",
+          "pattern": "^[1-9]\\d*$",
+          "maxLength": 19,
+          "examples": ["42"]
+        }
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "description": "Clave unica por solicitud. Repetirla con el mismo cuerpo es seguro; reutilizarla con otro cuerpo devuelve 409.",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "examples": ["pedido-4521-email-confirmacion"]
+        }
+      },
+      "ChannelFilter": {
+        "name": "canal",
+        "in": "query",
+        "required": false,
+        "description": "Filtra por canal de entrega.",
+        "schema": {
+          "$ref": "#/components/schemas/Channel"
+        }
+      },
+      "StatusFilter": {
+        "name": "estado",
+        "in": "query",
+        "required": false,
+        "description": "Filtra por estado actual.",
+        "schema": {
+          "$ref": "#/components/schemas/NotificationStatus"
+        }
+      },
+      "Page": {
+        "name": "page",
+        "in": "query",
+        "required": false,
+        "description": "Numero de pagina, comenzando en 1.",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        }
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "description": "Cantidad maxima de elementos por pagina.",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        }
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "API key ausente o invalida (AU001).",
+        "headers": {
+          "WWW-Authenticate": {
+            "schema": {
+              "type": "string"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": {
+                "code": "AU001",
+                "message": "Unauthorized"
+              }
+            }
+          }
+        }
+      },
+      "BadRequest": {
+        "description": "Parametros, cabeceras o cuerpo invalidos (BR001).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": {
+                "code": "BR001",
+                "message": "Missing required parameter"
+              }
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "El recurso solicitado no existe (NF001).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": {
+                "code": "NF001",
+                "message": "Not found"
+              }
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "La operacion entra en conflicto con el estado o unicidad del recurso (CF001).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": {
+                "code": "CF001",
+                "message": "Resource conflict"
+              }
+            }
+          }
+        }
+      },
+      "InternalServerError": {
+        "description": "Fallo interno no esperado (SE001).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": {
+                "code": "SE001",
+                "message": "Generic internal server error"
+              }
+            }
+          }
+        }
+      },
+      "ServiceUnavailable": {
+        "description": "Una dependencia necesaria no esta disponible (SU001).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": {
+                "code": "SU001",
+                "message": "Service temporarily unavailable"
+              }
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Health": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "UP"
+          }
+        }
+      },
+      "Channel": {
+        "type": "string",
+        "enum": ["EMAIL", "SMS"]
+      },
+      "NotificationStatus": {
+        "type": "string",
+        "enum": ["ENCOLADA", "ENVIADA", "FALLIDA"]
+      },
+      "AttemptResult": {
+        "type": "string",
+        "enum": ["EXITOSO", "FALLIDO"]
+      },
+      "PositiveBigInt": {
+        "type": "string",
+        "pattern": "^[1-9]\\d*$",
+        "maxLength": 19,
+        "examples": ["42"]
+      },
+      "TemplateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["nombre", "canal", "contenido", "variables"],
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "No puede contener solamente espacios."
+          },
+          "canal": {
+            "$ref": "#/components/schemas/Channel"
+          },
+          "contenido": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Texto de la plantilla; no puede contener solamente espacios."
+          },
+          "variables": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        }
+      },
+      "Template": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "nombre", "canal", "contenido", "variables"],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/PositiveBigInt"
+          },
+          "nombre": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "canal": {
+            "$ref": "#/components/schemas/Channel"
+          },
+          "contenido": {
+            "type": "string",
+            "minLength": 1
+          },
+          "variables": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        }
+      },
+      "NotificationVariables": {
+        "type": "object",
+        "minProperties": 0,
+        "propertyNames": {
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "additionalProperties": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        }
+      },
+      "NotificationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["canal", "destinatario", "plantillaId", "variables"],
+        "properties": {
+          "canal": {
+            "$ref": "#/components/schemas/Channel"
+          },
+          "destinatario": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "description": "Email valido cuando canal es EMAIL o numero E.164 cuando canal es SMS."
+          },
+          "plantillaId": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "variables": {
+            "$ref": "#/components/schemas/NotificationVariables"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "canal": {
+                  "const": "EMAIL"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "destinatario": {
+                  "type": "string",
+                  "format": "email"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "destinatario": {
+                  "type": "string",
+                  "pattern": "^\\+[1-9]\\d{7,14}$"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Notification": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "canal", "destinatario", "plantillaId", "variables", "estado", "intentos", "createdAt", "updatedAt"],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/PositiveBigInt"
+          },
+          "canal": {
+            "$ref": "#/components/schemas/Channel"
+          },
+          "destinatario": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "plantillaId": {
+            "$ref": "#/components/schemas/PositiveBigInt"
+          },
+          "variables": {
+            "$ref": "#/components/schemas/NotificationVariables"
+          },
+          "estado": {
+            "$ref": "#/components/schemas/NotificationStatus"
+          },
+          "intentos": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "example": {
+          "id": "42",
+          "canal": "EMAIL",
+          "destinatario": "cliente@example.com",
+          "plantillaId": "1",
+          "variables": {
+            "nombre": "Ana",
+            "pedido": 4521
+          },
+          "estado": "ENCOLADA",
+          "intentos": 0,
+          "createdAt": "2026-07-18T20:10:00.000Z",
+          "updatedAt": "2026-07-18T20:10:00.000Z"
+        }
+      },
+      "DeliveryAttempt": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "notificationId", "numero", "resultado", "detalle", "timestamp"],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/PositiveBigInt"
+          },
+          "notificationId": {
+            "$ref": "#/components/schemas/PositiveBigInt"
+          },
+          "numero": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "resultado": {
+            "$ref": "#/components/schemas/AttemptResult"
+          },
+          "detalle": {
+            "type": ["string", "null"]
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "NotificationDetails": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "canal", "destinatario", "plantillaId", "variables", "estado", "intentos", "createdAt", "updatedAt", "historialIntentos"],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/PositiveBigInt"
+          },
+          "canal": {
+            "$ref": "#/components/schemas/Channel"
+          },
+          "destinatario": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "plantillaId": {
+            "$ref": "#/components/schemas/PositiveBigInt"
+          },
+          "variables": {
+            "$ref": "#/components/schemas/NotificationVariables"
+          },
+          "estado": {
+            "$ref": "#/components/schemas/NotificationStatus"
+          },
+          "intentos": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "historialIntentos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeliveryAttempt"
+            }
+          }
+        }
+      },
+      "Pagination": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["page", "limit", "totalItems", "totalPages"],
+        "properties": {
+          "page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "totalItems": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalPages": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "NotificationPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["items", "pagination"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Notification"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "example": {
+          "items": [],
+          "pagination": {
+            "page": 1,
+            "limit": 20,
+            "totalItems": 0,
+            "totalPages": 0
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code", "message"],
+            "properties": {
+              "code": {
+                "type": "string",
+                "pattern": "^[A-Z]{2}\\d{3}$"
+              },
+              "message": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

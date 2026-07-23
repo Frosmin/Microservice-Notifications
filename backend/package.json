@@ -1,0 +1,56 @@
+{
+  "name": "tigo.micro.template",
+  "version": "1.0.0",
+  "description": "Template base para microservicios Node.js",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run test/unit-test/",
+    "start": "node index.js",
+    "start:worker": "node worker.js",
+    "dev": "node --watch index.js",
+    "dev:worker": "node --watch worker.js",
+    "dev:sms-mock": "node --watch dev/sms-mock.js",
+    "coverage": "vitest run --coverage test/unit-test/",
+    "test:performance": "k6 run --summary-mode=full --summary-export docs/evidencias/k6/summary.json test/performance/notifications.k6.js",
+    "test:performance:email": "k6 run --summary-mode=full --summary-export docs/evidencias/k6/summary-email.json test/performance/notifications.k6.js",
+    "test:performance:sms": "k6 run --summary-mode=full --summary-export docs/evidencias/k6/summary-sms.json test/performance/notifications.k6.js",
+    "test:performance:status": "k6 run --summary-mode=full --summary-export docs/evidencias/k6/summary-status.json test/performance/notification-status.k6.js",
+    "test:performance:templates": "k6 run --summary-mode=full --summary-export docs/evidencias/k6/summary-templates.json test/performance/templates.k6.js",
+    "test:performance:history": "k6 run --summary-mode=full --summary-export docs/evidencias/k6/summary-history.json test/performance/notification-history.k6.js",
+    "test:smoke": "vitest run test/smoke/",
+    "test:twilio": "vitest run test/integration/twilio.sms.integration.test.js",
+    "lint": "eslint . --max-warnings 0 --format html --output-file docs/evidencias/quality/eslint-report.html",
+    "sonar": "sonar"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://gitlab.tigo.net.bo/channel/tigo.micro.template.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@tigo/error-code": "^1.0.20",
+    "@tigo/logger": "^1.0.1",
+    "@tigo/postgres-connector": "^1.1.0",
+    "body-parser": "^2.2.0",
+    "bullmq": "^5.80.8",
+    "dotenv": "^17.2.3",
+    "express-prom-bundle": "^8.0.0",
+    "helmet": "^8.1.0",
+    "ioredis": "^5.11.1",
+    "luxon": "^3.7.2",
+    "nodemailer": "^9.0.3",
+    "swagger-ui-express": "^5.0.1",
+    "ultimate-express": "2.0.9",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@apidevtools/swagger-parser": "^12.1.0",
+    "@sonar/scan": "^4.4.0",
+    "@vitest/coverage-v8": "^4.0.7",
+    "eslint": "^9.39.5",
+    "node-mocks-http": "^1.17.2",
+    "vitest": "^4.0.7"
+  }
+}

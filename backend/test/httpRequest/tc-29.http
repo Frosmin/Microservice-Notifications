@@ -1,0 +1,30 @@
+@baseUrl = http://localhost:3050/api/v1
+
+### TC-29.1 - Filtrar EMAIL
+GET {{baseUrl}}/notifications?canal=EMAIL
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+
+
+### TC-29.2 - Filtrar SMS
+GET {{baseUrl}}/notifications?canal=SMS
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+
+
+### TC-29.3 - Filtrar ENCOLADA
+GET {{baseUrl}}/notifications?estado=ENCOLADA
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+
+
+### TC-29.4 - Filtrar ENVIADA
+GET {{baseUrl}}/notifications?estado=ENVIADA
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+
+
+### TC-29.5 - Filtrar FALLIDA
+GET {{baseUrl}}/notifications?estado=FALLIDA
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+
+
+### TC-29.6 - Combinar canal y estado
+GET {{baseUrl}}/notifications?canal=SMS&estado=FALLIDA&page=1&limit=20
+X-API-Key: {{$dotenv SERVICE_API_KEY}}

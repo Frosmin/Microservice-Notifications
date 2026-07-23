@@ -1,0 +1,29 @@
+@baseUrl = http://localhost:3050/api/v1
+@runId = cambiar-antes-de-repetir
+@idempotencyKey = 1234567890
+
+### Preparacion - Plantilla
+# @name template
+POST {{baseUrl}}/templates
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{ "nombre": "tc14-template-{{$timestamp}}", "canal": "EMAIL", "contenido": "Hola \u007b\u007bnombre\u007d\u007d", "variables": ["nombre"] }
+
+### TC-14.1 - Primera solicitud
+# @name firstRequest
+POST {{baseUrl}}/notifications
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Idempotency-Key: {{idempotencyKey}}
+Content-Type: application/json
+
+{ "canal": "EMAIL", "destinatario": "cliente@example.com", "plantillaId": {{template.response.body.$.id}}, "variables": { "nombre": "Ana" } }
+
+
+### TC-14.2 - Repeticion exacta
+POST {{baseUrl}}/notifications
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Idempotency-Key: {{idempotencyKey}}
+Content-Type: application/json
+
+{ "canal": "EMAIL", "destinatario": "cliente@example.com", "plantillaId": {{template.response.body.$.id}}, "variables": { "nombre": "Ana" } }

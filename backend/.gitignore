@@ -1,0 +1,15 @@
+/node_modules
+/.scannerwork
+/coverage
+/.vscode
+/.claude
+# tools
+run_deployment.sh
+DockerfilePROD
+
+JenkinsfileBAK
+deployment-bak.yaml
+
+.env
+skills-lock.json
+skills

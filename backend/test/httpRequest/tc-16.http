@@ -1,0 +1,9 @@
+@baseUrl = http://localhost:3050/api/v1
+
+### TC-16 - Plantilla inexistente
+POST {{baseUrl}}/notifications
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Idempotency-Key: tc16-inexistente-{{$timestamp}}
+Content-Type: application/json
+
+{ "canal": "EMAIL", "destinatario": "cliente@example.com", "plantillaId": 99999999, "variables": {} }

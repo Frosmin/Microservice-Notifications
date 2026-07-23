@@ -1,0 +1,114 @@
+@startuml notificaciones-01-bp-envio
+
+title BP RF-7.1 - Envío de notificación
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam activity {
+    BackgroundColor white
+    BorderColor #1676D2
+    DiamondBackgroundColor #FFF2CC
+    DiamondBorderColor #C99A00
+    StartColor #222222
+    EndColor #222222
+}
+skinparam swimlane {
+    BorderColor #8AB4E8
+    TitleBackgroundColor #E8F1FB
+    TitleFontColor #003B70
+}
+
+|Servicio interno|
+start
+:POST /api/v1/notifications\ncon X-API-Key e Idempotency-Key;
+
+|API REST|
+:Validar configuración y X-API-Key;
+
+if (¿API key configurada?) then (No)
+    :Responder 503;
+    stop
+endif
+if (¿API key válida?) then (No)
+    :Responder 401;
+    stop
+endif
+:Validar body, destinatario,\nplantilla, canal y variables;
+if (¿Solicitud válida?) then (No)
+    :Responder 400 o 404;
+    stop
+endif
+
+|PostgreSQL - fuente de verdad|
+:BEGIN;
+:INSERT notificación ENCOLADA\ncon idempotency_key UNIQUE;
+if (¿Clave ya utilizada?) then (Sí)
+    :COMMIT sin cambios;
+    :Consultar y comparar payload;
+    |API REST|
+    if (¿Payload idéntico?) then (Sí)
+        :Responder 200 con recurso existente;
+    else (No)
+        :Responder 409 Conflict;
+    endif
+    stop
+else (No)
+    :INSERT notification_outbox;
+    :COMMIT notificación + outbox;
+endif
+
+|API REST|
+:Responder 202 Accepted\ncon estado ENCOLADA;
+
+
+|Procesamiento asíncrono|
+:Outbox Publisher reclama evento\ncon FOR UPDATE SKIP LOCKED;
+:Crear job BullMQ\njobId = outbox-{id};
+if (¿Job publicado?) then (No)
+    :Mantener evento pendiente y\nreprogramar available_at con backoff;
+    stop
+endif
+:Marcar outbox como publicado;
+:BullMQ entrega job respetando\nthroughput configurable;
+:Worker obtiene advisory lock y\nconsulta estado en PostgreSQL;
+if (¿Ya está ENVIADA?) then (Sí)
+    :Omitir job duplicado;
+    stop
+endif
+if (¿Está FALLIDA o agotó intentos?) then (Sí)
+    |PostgreSQL - fuente de verdad|
+    :Asegurar estado FALLIDA;
+    stop
+endif
+
+|Proveedor externo|
+:Procesar solicitud de envío por Gmail SMTP\no Twilio REST;
+
+|Procesamiento asíncrono|
+if (¿Proveedor aceptó el envío?) then (Sí)
+    |PostgreSQL - fuente de verdad|
+    :Registrar intento EXITOSO y\nestado ENVIADA;
+
+else (No)
+    |PostgreSQL - fuente de verdad|
+    :Registrar intento FALLIDO;
+    if (¿Error transitorio y\nquedan intentos?) then (Sí)
+        :Mantener estado ENCOLADA;
+        |Procesamiento asíncrono|
+        :BullMQ programa reintento\ncon backoff exponencial;
+    else (No)
+        |PostgreSQL - fuente de verdad|
+        :Actualizar estado FALLIDA;
+    endif
+endif
+stop
+
+legend right
+|= Regla |= Garantía |
+| Persistencia | Notificación y outbox atómicos |
+| Entrega | Al menos una vez con controles anti-duplicado |
+| Redis | Solo infraestructura operativa BullMQ |
+| Acceso | X-API-Key en operaciones /api/v1 protegidas |
+endlegend
+
+@enduml

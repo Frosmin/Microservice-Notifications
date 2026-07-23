@@ -1,0 +1,12 @@
+@baseUrl = http://localhost:3050/api/v1
+@exhaustedNotificationId = 29
+
+### TC-34 - Reintentar FALLIDA con intentos >= 5
+# Ajuste exhaustedNotificationId a una notificacion preparada por TC-24.
+POST {{baseUrl}}/notifications/{{exhaustedNotificationId}}/retry
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+
+
+### Comprobar que permanece FALLIDA con cinco intentos
+GET {{baseUrl}}/notifications/{{exhaustedNotificationId}}
+X-API-Key: {{$dotenv SERVICE_API_KEY}}

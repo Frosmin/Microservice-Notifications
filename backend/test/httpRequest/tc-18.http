@@ -1,0 +1,79 @@
+@baseUrl = http://localhost:3050/api/v1
+
+### Preparacion - Plantilla EMAIL
+# @name emailTemplate
+POST {{baseUrl}}/templates
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{ "nombre": "tc18-email-{{$timestamp}}", "canal": "EMAIL", "contenido": "Hola \u007b\u007bdato\u007d\u007d", "variables": ["dato"] }
+
+### Preparacion - Plantilla SMS
+# @name smsTemplate
+POST {{baseUrl}}/templates
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{ "nombre": "tc18-sms-{{$timestamp}}", "canal": "SMS", "contenido": "Hola \u007b\u007bdato\u007d\u007d", "variables": ["dato"] }
+
+### TC-18.1 - Correo invalido
+POST {{baseUrl}}/notifications
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Idempotency-Key: tc18-email-invalido-{{$timestamp}}
+Content-Type: application/json
+
+{ "canal": "EMAIL", "destinatario": "correo-invalido", "plantillaId": {{emailTemplate.response.body.$.id}}, "variables": { "dato": "x" } }
+
+
+### TC-18.2 - SMS sin E.164
+POST {{baseUrl}}/notifications
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Idempotency-Key: tc18-sms-invalido-{{$timestamp}}
+Content-Type: application/json
+
+{ "canal": "SMS", "destinatario": "70000000", "plantillaId": {{smsTemplate.response.body.$.id}}, "variables": { "dato": "x" } }
+
+
+### TC-18.3 - Canal no soportado
+POST {{baseUrl}}/notifications
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Idempotency-Key: tc18-push-{{$timestamp}}
+Content-Type: application/json
+
+{ "canal": "PUSH", "destinatario": "cliente", "plantillaId": {{emailTemplate.response.body.$.id}}, "variables": { "dato": "x" } }
+
+
+### TC-18.4 - plantillaId no positivo
+POST {{baseUrl}}/notifications
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Idempotency-Key: tc18-id-{{$timestamp}}
+Content-Type: application/json
+
+{ "canal": "EMAIL", "destinatario": "cliente@example.com", "plantillaId": 0, "variables": { "dato": "x" } }
+
+
+### TC-18.5 - Variable no primitiva
+POST {{baseUrl}}/notifications
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Idempotency-Key: tc18-objeto-{{$timestamp}}
+Content-Type: application/json
+
+{ "canal": "EMAIL", "destinatario": "cliente@example.com", "plantillaId": {{emailTemplate.response.body.$.id}}, "variables": { "dato": { "objeto": true } } }
+
+
+### TC-18.6 - Campo requerido omitido
+POST {{baseUrl}}/notifications
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Idempotency-Key: tc18-omitido-{{$timestamp}}
+Content-Type: application/json
+
+{ "canal": "EMAIL", "plantillaId": {{emailTemplate.response.body.$.id}}, "variables": { "dato": "x" } }
+
+
+### TC-18.7 - Propiedad adicional
+POST {{baseUrl}}/notifications
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Idempotency-Key: tc18-extra-{{$timestamp}}
+Content-Type: application/json
+
+{ "canal": "EMAIL", "destinatario": "cliente@example.com", "plantillaId": {{emailTemplate.response.body.$.id}}, "variables": { "dato": "x" }, "campoExtra": true }

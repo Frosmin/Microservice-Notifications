@@ -1,0 +1,30 @@
+@baseUrl = http://localhost:3050/api/v1
+
+### TC-31.1 - Canal no soportado
+GET {{baseUrl}}/notifications?canal=PUSH
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+
+
+### TC-31.2 - Estado no soportado
+GET {{baseUrl}}/notifications?estado=PROCESANDO
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+
+
+### TC-31.3 - page cero
+GET {{baseUrl}}/notifications?page=0
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+
+
+### TC-31.4 - limit cero
+GET {{baseUrl}}/notifications?limit=0
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+
+
+### TC-31.5 - limit mayor a 100
+GET {{baseUrl}}/notifications?limit=101
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+
+
+### TC-31.6 - Parametro desconocido
+GET {{baseUrl}}/notifications?orden=asc
+X-API-Key: {{$dotenv SERVICE_API_KEY}}

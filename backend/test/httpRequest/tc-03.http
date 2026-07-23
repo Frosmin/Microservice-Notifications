@@ -1,0 +1,91 @@
+@baseUrl = http://localhost:3050/api/v1
+
+### TC-03.1 - Campo requerido omitido
+POST {{baseUrl}}/templates
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{
+  "canal": "EMAIL",
+  "contenido": "Hola \u007b\u007bnombre\u007d\u007d",
+  "variables": ["nombre"]
+}
+
+
+### TC-03.2 - Nombre vacio
+POST {{baseUrl}}/templates
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{
+  "nombre": "   ",
+  "canal": "EMAIL",
+  "contenido": "Hola",
+  "variables": []
+}
+
+
+### TC-03.3 - Nombre mayor a 100 caracteres
+POST {{baseUrl}}/templates
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{
+  "nombre": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "canal": "EMAIL",
+  "contenido": "Hola",
+  "variables": []
+}
+
+
+### TC-03.4 - Contenido en blanco
+POST {{baseUrl}}/templates
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{
+  "nombre": "tc03-contenido-vacio-{{$timestamp}}",
+  "canal": "EMAIL",
+  "contenido": "   ",
+  "variables": []
+}
+
+
+### TC-03.5 - Canal no soportado y variables repetidas
+POST {{baseUrl}}/templates
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{
+  "nombre": "tc03-push-{{$timestamp}}",
+  "canal": "PUSH",
+  "contenido": "Hola \u007b\u007bnombre\u007d\u007d",
+  "variables": ["nombre", "nombre"]
+}
+
+
+### TC-03.6 - Variable vacia
+POST {{baseUrl}}/templates
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{
+  "nombre": "tc03-variable-vacia-{{$timestamp}}",
+  "canal": "SMS",
+  "contenido": "Hola",
+  "variables": ["   "]
+}
+
+
+### TC-03.7 - Propiedad adicional
+POST {{baseUrl}}/templates
+X-API-Key: {{$dotenv SERVICE_API_KEY}}
+Content-Type: application/json
+
+{
+  "nombre": "tc03-extra-{{$timestamp}}",
+  "canal": "EMAIL",
+  "contenido": "Hola",
+  "variables": [],
+  "campoExtra": "valor"
+}
